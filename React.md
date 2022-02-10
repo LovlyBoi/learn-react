@@ -184,18 +184,6 @@ PWA 可以添加至主屏幕，点击主屏幕图标即可实现启动动画以�
 
 喷出配置后，会多出两个文件夹，一个是 config 文件夹，一个是 scripts 文件夹。
 
-## 虚拟 DOM
-
-在 React 中，我们使用 `React.createElement()` 来创建一个 `ReactElement` 对象。这个对象其实就是一个虚拟节点（Virtual Node），React 使用许多虚拟节点来组成一个虚拟 DOM 树。
-
-**为什么使用虚拟 DOM？**
-
-因为希望能追踪状态变化，而且 DOM 操作很浪费资源。所以我们先使用虚拟 DOM 进行对比，再进行更新。真实 DOM 节点太过复杂，而且 DOM 的改变会引起浏览器的回流和重绘，所以使用虚拟 DOM 来进行缓存对比。其实是使用 JS 的运算时间来换取操作 DOM 的开销（减少 DOM 操作）。通过虚拟 DOM，让我们的编程方式从命令式编程转到了声明时编程。使用虚拟 DOM 还可以使应用具有跨平台性。
-
-### Diff 算法
-
-可以看这篇文章：[React、Vue2、Vue3的三种Diff算法](https://juejin.cn/post/6919376064833667080#heading-0 )。
-
 ## 组件化开发
 
 组件化是 React 开发的核心思想，任何复杂应用最后都会被拆分为一个组件树。
@@ -492,3 +480,96 @@ export default class App extends Component {
 ```
 
 因为这么写代码较为冗余，所以我们开发中使用更多的还是 redux 和 hooks。
+
+## setState
+
+我们不能直接修改 state 中的数据，而是需要通过 setState 来对 state 修改，因为直接修改 state，React 是检测不到的（React 没有像 Vue 检测 data 那样的响应式系统）。setState 是 Component 组件实现的方法。
+
+### 异步更新
+
+setState 是异步更新的（事实上不是异步的，而是收集起来批处理了），所以如果同步的读取 state 中的数据，那么数据肯定是未修改的。
+
+那么为什么要把 setState 设计为异步更新的呢？
+
+因为 setState 设计为异步，可以显著提高性能。如果每一次使用 setState 都需要同步更新，那么就意味着 render 函数被反复调用，界面反复重新渲染，而异步更新意味着可以批量更新。并且，如果同步更新了 state，但是还没有执行 render 函数，那么 state 和 props 不能保持同步。
+
+如果希望得到异步的数据，需要传入 setState 的第二个参数，是一个回调函数，这个回调函数会在数据更新完成后被回调（类似于 Vue 中的 nextTick）。
+
+### 同步更新
+
+有时，setState 却是同步的更新：
+
+- 在 setTimeout 回调中的更新是**同步**的
+- 在原生 DOM 事件回调中，也是**同步**的
+- 在组件生命周期或 React 合成事件中，setState 是**异步**的
+
+### 数据合并
+
+在 setState 更新时，并不会直接使用新的数据完全覆盖旧数据，而是使用 `Object.assign({}, 原来的state, 新的state)` 来进行一个浅拷贝，所以不需要担心会覆盖其他的数据。
+
+### setState 合并
+
+多次调用 setState 会导致这些操作被合并为一次 setState，如果不希望被合并后导致多次调用后只生效一次，可以选择将第一个参数传入一个函数：
+
+```js
+// 这里prevState是上一次的state
+this.setState((prevState, props) => {
+  return {
+    counter: prevState.counter + 1
+  }
+})
+
+this.setState((prevState, props) => {
+  return {
+    counter: prevState.counter + 1
+  }
+})
+
+// 调用2次，就会加2，如果是正常的传入对象的setState，则会被合并为最后一次操作
+```
+
+## React 更新流程
+
+props/state 改变 --> render 函数重新执行 --> 生成新的虚拟 DOM --> 新旧 DOM 进行 diff --> 找到差异更新 --> 得到新的真实 DOM
+
+### 虚拟 DOM
+
+在 React 中，我们使用 `React.createElement()` 来创建一个 `ReactElement` 对象。这个对象其实就是一个虚拟节点（Virtual Node），React 使用许多虚拟节点来组成一个虚拟 DOM 树。
+
+**为什么使用虚拟 DOM？**
+
+因为希望能追踪状态变化，而且 DOM 操作很浪费资源。所以我们先使用虚拟 DOM 进行对比，再进行更新。真实 DOM 节点太过复杂，而且 DOM 的改变会引起浏览器的回流和重绘，所以使用虚拟 DOM 来进行缓存对比。其实是使用 JS 的运算时间来换取操作 DOM 的开销（减少 DOM 操作）。通过虚拟 DOM，让我们的编程方式从命令式编程转到了声明时编程。使用虚拟 DOM 还可以使应用具有跨平台性。
+
+### Diff 算法
+
+如果对两棵树完全进行对比更新，那么时间复杂度是 O(n^3)，这对于 React 来说开销太昂贵了。
+
+所以 React 将这个算法简化到了 O(n) 级别：
+
+-  只有同级别的节点之间才会进行比较，跨级节点并不会进行比较。
+- 只要节点类型不一样，整颗子树都重新渲染。
+- 可以通过 key 来指定哪些结点在不同的渲染下保持稳定。
+- 节点类型相同，保留 DOM 元素，仅对比更新改变的属性。
+- 如果组件类型相同，更新该组件的 props，调用 render 方法，对新旧 DOM 接着递归 diff。
+
+可以再看看这篇文章：[React、Vue2、Vue3的三种Diff算法](https://juejin.cn/post/6919376064833667080#heading-0 )。
+
+**keys 优化**：
+
+列表渲染中，仅仅在中间插入了一条数据，但是由于新旧 DOM diff 时依次对比，发现从插入的数据开始全部都不同，导致后面所有的节点都需要重新渲染。
+
+为了防止这种情况，我们可以给每一个节点配置一个 key 值，来标识每一个节点，让他们可以被识别出来，这样我们就可以知道哪些元素只需要位移，而不是重新删除再创建。
+
+作为 key，不要使用每次渲染都会改变的值，这样做对于性能是没有优化的，一般来说都是使用 id。
+
+```react
+<ul>
+	{
+    this.state.movies.map((item) => {
+      // 给每一个子元素添加一个单独的key
+      return (<li key={item}></li>)
+    })
+  }
+</ul>
+```
+
