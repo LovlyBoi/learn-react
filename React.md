@@ -681,8 +681,135 @@ memo 就是对组件进行了一次包裹，返回的对象多出了一个 compa
 - 触发强制动画
 - 继承第三方 DOM 库
 
+### 使用 Ref
+
 如何创建 refs 来获取 DOM 元素？
 
 - 传入字符串。使用时通过 `this.refs.xxx` 来获取对应的元素
 - 传入一个对象。对象通过 `React.createRef()` 创建，使用时获取到创建的对象中的 `crrent` 属性就是对应元素
 - 传入一个函数。该函数会在 DOM 被挂载的时候回调，这个函数会传入一个 元素对象，我们可以自己保存，使用时直接拿到之前保存的元素对象即可。
+
+ 
+
+```react
+import React, { PureComponent, createRef } from 'react'
+
+class App extends PureComponent {
+  constructor(props) {
+		super(props)
+    // 创建引用对象
+    this.titleRef2 = createRef()
+    // 回调函数中赋值给这个变量
+    this.titleRef3 = null
+  }
+  
+  render() {
+    return (
+    	<div>
+        {/* 第一种方式 */}
+        {/* 通过ref属性告诉React这是哪一个引用，要获取他的元素的引用，即虚拟元素的ref值 */}
+      	<h2 ref="titleRef">Hello World!</h2>
+        
+        {/* 第二种方式 */}
+        {/* 通过createRef函数创建一个对象，将对象传进ref属性，这是React推荐的方式 */}
+        <h2 ref={titleRef2}>Hello World!</h2> 
+        
+        {/* 第三种方式 */}
+        {/* 传入一个回调函数，参数是这个DOM元素 */}
+        <h2 ref={arg => {this.titleRef3 = arg }}>Hello World!</h2> 
+        
+        <button onClick={e => {this.handleClick()}}></button>
+      </div>
+    )
+  }
+  
+  handleClick() {
+    // 使用方式一：可以在这里直接操作DOM元素（不推荐）
+		this.refs.titleRef.innerHTML = "Hello React!"
+    // 使用方式二：直接从组件实例中拿到引用，是一个对象，current属性是元素本身（React推荐）
+    this.titleRef2.current.innerHTML = "Hello React!"
+    // 使用方式三：回调函数中赋值的变量就是DOM元素
+    this.titleRef3.innerHTML = "Hello React!"
+  }
+}
+```
+
+### Ref 的类型
+
+ref 的值根据节点的类型而有所不同：
+
+- 当 ref 引用的是 HTML 元素时，构造函数中使用 React.createRef() 创建的 ref 接收底层 DOM 元素作为 `current` 属性。
+- 当 ref 引用的是 组件 时，ref 只想对应的组件实例作为 `current` 属性。
+- **不能在函数组件上使用 ref，因为他们没有实例**。
+
+因为 Ref 能获取组件实例，所以可以直接操作组件的方法。
+
+## 受控组件和非受控组件
+
+### 受控组件
+
+在 React 中，表单的处理方式和普通 DOM 不太一样，表单元素通常会保存一些内部的 state。
+
+比如一个 form 表单，我们通常使用 JS 来处理提交，而不是选择 HTML 的默认行为（React 没有阻止表单提交的默认行为），实现这种效果的标准方式是受控组价。 
+
+在 React 中，可变状态一般保存在 state 中， 并只能通过 setState 来更新。我们使 state 作为唯一数据源，渲染表单的 React 元素还控制着输入过程中表单发生的操作。被 React 以这种方式控制取值的表单输入元素就叫做受控组件。 
+
+```react
+import React, { PureComponent } from 'react'
+
+class App extends PureComponent {
+  constructor(props) {
+    super(props)
+    this.state = {
+      username: '',
+      options: 'option1'
+    }
+  }
+  
+  render() {
+    return (
+    	<form onSubmit={e => {this.handleSubmit(e)}}>
+        {/* input */}
+      	<label htmlFor="username">
+        	<input type="value" 
+            		 id="username" 
+            		 onChange={e => this.handleInputChange(e, 'username')}
+            		 value={this.state.username}
+          ></input>
+        </label>
+        
+        {/* select */}
+        <select name="options" 
+          			value={this.state.options}
+          			onChange={e => this.handleSelectChange(e, 'options')}
+        >
+        	<option value="option1">option1</option>
+          <option value="option2">option2</option>
+          <option value="option3">option3</option>
+        </select>
+        
+        <input type="submit" value="提交" />
+      </form>
+    )
+  }
+  
+  handleSubmit(event) {
+    event.preventDefault()
+    // 拿到数据
+    console.log(this.state)
+  }
+  
+  handleChange(event, key) {
+    this.setState({
+      // 不需要写很多函数
+      [key]: event.target.value
+      // 或者直接用event.target.name来做key
+      [event.target.name]: event.target.value
+    })
+  }
+}
+```
+
+### 非受控组件
+
+React 推荐尽量使用受控组件来处理表单数据。在一个受控组件中，表单数据是由 React 来管理的，另一种方案是使用非受控组件，这时表单数据将交由 DOM 节点来处理。如果使用非受控组件，那么我们需要使用 ref 来获取数据。
