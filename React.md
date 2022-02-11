@@ -259,7 +259,7 @@ React 组件（类组件）有自己的生命周期，常用的有：
 
 我们可以实现这些生命周期函数来让组件在特定的阶段来做一些事情。
 
-### 组件的嵌套与通信
+### 组件的通信
 
 在开发中，我们肯定会对组件进行嵌套，这就引发了一个问题，不同的组件之间如何通信？
 
@@ -481,6 +481,55 @@ export default class App extends Component {
 
 因为这么写代码较为冗余，所以我们开发中使用更多的还是 redux 和 hooks。
 
+**全局事件总线**：
+
+事件总线（event bus）实质上是一个全局对象，我们可以通过它来发出事件，也可以通过它监听一些事件。
+
+在 React 中我们使用比较多的是 events 这个第三方库。
+
+```shell
+npm i events
+```
+
+```react
+import React, { PureComponent } from 'react'
+import { EventEmmiter } from 'events'
+
+// 产生一个eventBus
+const eventBus = new EventEmitter()
+
+// 一个想要发出事件的组件
+class EmitterCpn extends PureComponent {
+    render() {}
+    
+    function emitHello() {
+		// 第一个参数为事件名，后面的参数是携带的数据
+        eventBus.emit('sayHello', 'Hello World!')
+    }
+}
+
+// 事件监听
+class AcceptEventCpn extends PureComponent {
+    // 在挂载后添加事件监听
+    componentDidMount() {
+        eventBus.addListener('sayHello', this.handleSayHello)
+    }
+    
+    // 卸载前取消监听
+    componentWillUnmount() {
+        eventBus.removeListener('sayHello', this.handleSayHello)
+    }
+    
+    // 处理函数
+    handleSayHello() {
+        
+    }
+	render() {}
+}
+```
+
+
+
 ## setState
 
 我们不能直接修改 state 中的数据，而是需要通过 setState 来对 state 修改，因为直接修改 state，React 是检测不到的（React 没有像 Vue 检测 data 那样的响应式系统）。setState 是 Component 组件实现的方法。
@@ -528,6 +577,12 @@ this.setState((prevState, props) => {
 // 调用2次，就会加2，如果是正常的传入对象的setState，则会被合并为最后一次操作
 ```
 
+### setState 数据不可变
+
+如果我们直接修改了 state，又调用 setState 更新状态，那么我们就违反了数据不可变原则。
+
+这样做虽然可以正常显示，但是就无法进行 SCU 优化，因为传进来的 nextState 和 之前的 prevState 是一样的（因为我们直接修改了 state）。
+
 ## React 更新流程
 
 props/state 改变 --> render 函数重新执行 --> 生成新的虚拟 DOM --> 新旧 DOM 进行 diff --> 找到差异更新 --> 得到新的真实 DOM
@@ -573,3 +628,61 @@ props/state 改变 --> render 函数重新执行 --> 生成新的虚拟 DOM --> 
 </ul>
 ```
 
+## React 性能优化
+
+每次重新执行 setState 之后，render 函数被重新调用，但是有时一个较高级组件的 setState 被重新调用之后，会让所有低一级的组件全部重新调用 render 函数，这有可能是完全没有必要的，因为可能只有其中一个低级组件需要重新 render。
+
+### SCU 优化
+
+我们可以通过 `shouldComponentUpdate` 这个函数来阻止一些不必要的 render。当这个函数返回 false 时，就可以阻止这个组件更新。
+
+```react
+// 传进来新的props和state
+shouldComponentUpdate(nextProps, nextState) {
+	if(this.state.counter !== nextState.counter) {
+        // 只有新的state中的counter改变时才会重新渲染
+        return true
+    }
+    return false
+}
+```
+
+### PureComponent
+
+如果不想一个一个实现 `shouldComponentUpdate`，只需要让组件继承自 `PureComponent` 类。
+
+渲染时会调用 `checkShouldComponentUpdate` 函数来决定组件是否更新，如果检测到了我们自己实现了 `shouldComponentUpdate` 方法，会根据我们自己的方法来决定组件是否更新， `checkShouldComponentUpdate` 默认返回 true，所以组价默认会更新。
+
+而如果组件是一个 `PureComponent` 类，则会对新旧 state 和 props 进行一个**浅比较**（shallowEqual），如果有不同，则会返回 true 来让组件更新，否则返回 false 阻止更新。
+
+### memo
+
+但是上面两种方法只能解决类组件，解决不了函数组件被调用的问题。对于函数组件，我们可以使用 memo 来解决：
+
+```react
+import React, { memo } from 'react'
+
+// 返回一个组件，我们就可以使用这个返回的组件
+const MemoHeader = memo(function Header(props) {
+    return <h2>msg: {props.msg}</h2>
+})
+
+```
+
+开发时我们的函数组件都可以包裹一个 memo。
+
+memo 就是对组件进行了一次包裹，返回的对象多出了一个 compare 属性，如果没有自己实现 compare，这个 compare 就是一个 shallowEqual，后面的实现本质就基本一样了。
+
+## Ref
+
+在 React 开发过程中，通常情况下不需要，也就建议直接操作 DOM，但是某些情况下，确实需要获取 DOM 进行某些操作：
+
+- 管理焦点，文本选择或媒体播放
+- 触发强制动画
+- 继承第三方 DOM 库
+
+如何创建 refs 来获取 DOM 元素？
+
+- 传入字符串。使用时通过 `this.refs.xxx` 来获取对应的元素
+- 传入一个对象。对象通过 `React.createRef()` 创建，使用时获取到创建的对象中的 `crrent` 属性就是对应元素
+- 传入一个函数。该函数会在 DOM 被挂载的时候回调，这个函数会传入一个 元素对象，我们可以自己保存，使用时直接拿到之前保存的元素对象即可。
