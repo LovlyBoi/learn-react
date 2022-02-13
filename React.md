@@ -1,6 +1,6 @@
-# React
+#  React
 
-All in JS.
+All in JavaScript.
 
 ## 介绍
 
@@ -263,7 +263,7 @@ React 组件（类组件）有自己的生命周期，常用的有：
 
 在开发中，我们肯定会对组件进行嵌套，这就引发了一个问题，不同的组件之间如何通信？
 
-**父子组件间通信**：
+#### 父子组件间通信
 
 - 父组件向子组件传递 props，来完成 父 -> 子 的通信。
 - 父组件向子组件传递函数，子组件调用，来完成子 -> 父 的通信。
@@ -392,7 +392,7 @@ class Child extends Component {
 }
 ```
 
-**跨组件通信**：
+#### 跨组件通信
 
 如果我们的组件跨了一层以上，我们就不太好直接传递了，而是会通过中间组件传递，但是这对于中间组件来说有些冗余：中间组件并不需要这些数据，却要在这里负责逐层传递。
 
@@ -813,3 +813,150 @@ class App extends PureComponent {
 ### 非受控组件
 
 React 推荐尽量使用受控组件来处理表单数据。在一个受控组件中，表单数据是由 React 来管理的，另一种方案是使用非受控组件，这时表单数据将交由 DOM 节点来处理。如果使用非受控组件，那么我们需要使用 ref 来获取数据。
+
+## 高阶组件
+
+高阶函数是接收一个或多个函数的函数，或是返回一个函数的函数。
+
+高阶组件（Higher-Order Components）是 参数为组件，返回值为新组件的函数。
+
+高阶组件主要的用处是对组件进行劫持。
+
+```react
+class App extends PureComponent {
+  render () {
+    return (
+    	<h2>Hello World!</h2>
+    )
+  }
+}
+
+// 高阶组件
+function enhanceComponent(WrappedComponent) {
+  return class NewComponent extends PureCompoent {
+    render() {
+      // 直接把prop传递给被增强的组件
+      return <WrappedComponent {...this.props}/>
+    }
+  }
+}
+
+const NewComponent = enhanceComponent(App)
+```
+
+### 高阶组件的应用
+
+**简化 context**：
+
+
+高阶组件还有很多用途，比如说简化多个组件同时消费一个 context 时的代码：
+
+```react
+import React, { PureComponent, createContext } from "react";
+
+const UserContext = createContext({
+  name: "Siven",
+  age: 18,
+});
+
+// 正常应该这么使用 Consumer，但是如果很多组件都需要使用，我们就会写很多遍
+class Home extends PureComponent {
+  render() {
+    return (
+      <UserContext.Consumer>
+        {(user) => <h2>name: {user.name}</h2>}
+      </UserContext.Consumer>
+    );
+  }
+}
+
+// 高阶组件，用来使其他组件能拿到UserContext
+function withUser(WrappedComponent) {
+  return class newComponent extends PureComponent {
+    render() {
+      return (
+        <UserContext.Consumer>
+          {/* 通过prop的形式把user传过去 */}
+          {(user) => (<WrappedComponent {...this.props} {...user}/>)}
+        </UserContext.Consumer>
+      )
+    }
+  }
+}
+
+class Detail extends PureComponent {
+  render() {
+    return (
+      // 用props接受高阶组件传过来的值
+      <h2>name: {this.props.name}, age: {this.props.age}</h2>
+    )
+  }
+}
+
+const DetailWithUser = withUser(Detail)
+
+export default class App extends PureComponent {
+  render() {
+    return (
+      <UserContext.Provider
+        value={{ name: "Jobs", age: 56 }}
+      >
+        <Home />
+        <hr />
+        <DetailWithUser />
+      </UserContext.Provider>
+    );
+  }
+}
+ 
+```
+
+**组件鉴权**：
+
+我们也可以使用高阶组件来完成组件鉴权功能：
+
+```react
+import React, { PureComponent } from 'react'
+
+// 假设有一个购物车页面需要鉴权，不登录不能看到
+class Cart extends PureComponent {
+  render() {
+    return <h2>Cart Page</h2>
+  }
+}
+
+// 登录页面
+class Login extends PureComponent {
+  render() {
+    return <h2>Login Page</h2>
+  }
+}
+
+// 鉴权高阶组件，没登录就跳转到登录页面
+function withAuth(WrappedComponent) {
+  return props => {
+    const {isLogin} = props
+    return isLogin ? <WrappedComponent {...props}/> : <Login {...props}/>
+  }
+}
+
+const CartWithAuth = withAuth(Cart)
+
+export default class App extends PureComponent {
+  render() {
+    return (
+      <div>
+        {/* 如果登陆了就展示Cart */}
+        <CartWithAuth isLogin={false} />
+      </div>
+    )
+  }
+}
+
+```
+
+### 高阶组件的意义
+
+通过高阶组件，我们很轻易的就可以对 React 代码进行更优雅的处理和增强。
+
+但是 HOC 也有着自己的缺陷，比如如果我们多次增强一个组件时，调试和维护会很难；且在劫持 props 时，不规范的代码可能会导致数据的不一致。
