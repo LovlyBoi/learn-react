@@ -1204,6 +1204,278 @@ render() {
 
 
 
+## 过渡动画
+
+在开发中，如果我们希望给一个组件的显示和消失添加某种过渡动画，我们可以使用原生 CSS 来实现，也可以选择 React 提供的动画插件 `react-transition-group`。这个库可以方便的实现入场和离场动画。
+
+**安装**：
+
+```shell
+npm i react-transition-group
+```
+
+**使用**：
+
+`react-transition-group` 主要包含四个组件：
+
+- `Transition` 是一个和平台无关的组件
+- `CSSTransition` 通常使用 CSSTransition 来完成过渡动画效果
+- `SwitchTransition` 两个组件显示和隐藏切换时，使用该组件
+- `TransitionGroup` 将多个动画组件包裹其中，一般用于列表中元素的动画
+
+**CSSTransition**：
+
+```react
+import React, { PureComponent } from "react";
+
+// CSSTransition的使用
+import { CSSTransition } from "react-transition-group";
+import "./CSSTransition.css";
+
+class CSSTransitionDemo extends PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = {
+      isShow: true,
+    };
+  }
+
+  render() {
+    return (
+      <div>
+        {/* 
+          使用CSSTransition包裹，他会在合适的时候管理其中的类的添加和移除
+            in 属性表示根据哪个变量展示或隐藏
+            classNames 对应动画添加时是的类名，这里就是title-enter等
+            timeout 表示动画持续时间(ms)
+            unmountOnExit 表示动画结束时卸载掉对应组件，默认是false，改成true就可以卸载掉了
+            appear 表示应用对应的appear类，不需要值，写上appear就可以了(其实enter和exit也是这么设置的，但是他们默认是true，而appear是false)
+        */}
+        {/* 
+          CSSTransition在执行过程中会有三个状态：
+            1. 开始状态：-appear、-enter、-exit
+            2. 执行动画：-appear-active、-enter-active、-exit-active
+            3. 执行结束：-appear-done、-enter-done、-exit-done
+          appear 表示首次挂载时是否有动画
+        */}
+        <CSSTransition
+          in={this.state.isShow}
+          classNames="title"
+          timeout={300}
+          unmountOnExit={true}
+        >
+          <h2>CSSTransitionDemos</h2>
+        </CSSTransition>
+
+        <button
+          onClick={(e) => {
+            this.changeShow();
+          }}
+        >
+          显示/隐藏
+        </button>
+      </div>
+    );
+  }
+
+  changeShow() {
+    this.setState({
+      isShow: !this.state.isShow,
+    });
+  }
+}
+
+export default class App extends PureComponent {
+  render() {
+    return (
+      <div>
+        <CSSTransitionDemo />
+      </div>
+    );
+  }
+}
+
+```
+
+```css
+.title-enter, .title-appear {
+  opacity: 0;
+}
+
+.title-enter-active, .title-appear-active {
+  opacity: 1;
+  transition: all 300ms;
+}
+
+.title-exit {
+  opacity: 1;
+}
+
+.title-exit-active {
+  opacity: 0;
+  transition: all 300ms;
+}
+
+.title-exit-done {
+  opacity: 0;
+}
+```
+
+**SwitchTransition**：
+
+使用 SwitchTransition 来进行切换动画。
+
+```react
+import React, { PureComponent } from "react";
+
+import { SwitchTransition, CSSTransition } from "react-transition-group";
+import "./SwitchTransition.css";
+
+// SwitchTransition的使用
+class SwitchTransitionDemo extends PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = {
+      isOn: false,
+    };
+  }
+
+  render() {
+    const { isOn } = this.state;
+    return (
+      // 和Vue的模式类似，默认先出后进，可以改为in-out，表示下一个状态先进来，这一个状态再消失
+      <SwitchTransition mode="out-in">
+        {/* 添加一个key，因为按钮是不会消失的 */}
+        <CSSTransition key={isOn ? "on" : "off"} classNames="btn" timeout={300}>
+          <button
+            onClick={(e) => {
+              this.setState({ isOn: !isOn });
+            }}
+          >
+            {isOn ? "on" : "off"}
+          </button>
+        </CSSTransition>
+      </SwitchTransition>
+    );
+  }
+}
+
+export default class App extends PureComponent {
+  render() {
+    return (
+      <div>
+        <SwitchTransitionDemo />
+      </div>
+    );
+  }
+}
+
+```
+
+```css
+.btn-enter {
+  opacity: 0;
+}
+
+.btn-enter-active {
+  opacity: 1;
+  transition: all 300ms;
+}
+
+.btn-exit {
+  opacity: 1;
+}
+
+.btn-exit-active {
+  opacity: 0;
+  transition: all 300ms;
+}
+
+.btn-exit-done {
+  opacity: 0;   
+}
+
+```
+
+**TransitionGroup**：
+
+TransitionGroup 用来执行一组的动画。
+
+```react
+import React, { PureComponent } from "react";
+
+import { CSSTransition, TransitionGroup } from "react-transition-group";
+import "./TransitionGroup.css";
+
+class TransitionGroupDemo extends PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = {
+      itemList: ["Siven", "Jobs", "Wooen"],
+    };
+  }
+
+  render() {
+    return (
+      <div>
+        {/* 多个元素动画需要包裹TransitionGroup，中间不可以再包裹其他元素（我觉得是TransitionGroup在定制他包裹的子元素，所以不能跨层级） */}
+        <TransitionGroup>
+          {this.state.itemList.map((item, index) => {
+            return (
+              <CSSTransition timeout={300} classNames="item" key={index}>
+                <div>{item}</div>
+              </CSSTransition>
+            );
+          })}
+        </TransitionGroup>
+        <button
+          onClick={(e) =>
+            this.setState({ itemList: [...this.state.itemList, "Siven"] })
+          }
+        >
+          addName
+        </button>
+      </div>
+    );
+  }
+}
+
+export default class App extends PureComponent {
+  render() {
+    return (
+      <div>
+        <TransitionGroupDemo />
+      </div>
+    );
+  }
+}
+
+```
+
+```css
+.item-enter {
+  opacity: 0;
+}
+
+.item-enter-active {
+  opacity: 1;
+  transition: all 300ms;
+}
+
+.item-exit {
+  opacity: 1;
+}
+
+.item-exit-active {
+  opacity: 0;
+  transition: all 300ms;
+}
+
+
+```
+
+
+
 ## AntDesign 组件库
 
 ant design 简称 antd，是蚂蚁金服开源的 UI 组件库，主要用于研发企业级中后台产品。
