@@ -744,6 +744,45 @@ ref 的值根据节点的类型而有所不同：
 
 因为 Ref 能获取组件实例，所以可以直接操作组件的方法。
 
+### Ref 的转发
+
+我们可以使用 forwardRef 高阶函数来获取函数组件的 Ref。
+
+```react
+function Home(props) {
+  return (
+  	<h2>Hello World</h2>
+  )
+}
+
+// 使用forword高阶组件增强，多传过来一个ref参数
+const Home = forwardRef(function(props, ref) {
+  return (
+    // 使用ref挂在想用的地方
+  	<h2 ref={ref}>Hello World</h2>
+  )
+})
+
+class App extends PureComponent {
+  constructor(props) {
+    super(props)
+    
+    this.homeRef = createRef()
+  }
+  
+  render() {
+    return (
+    	<div>
+        {/* 不可以这么拿函数组件的ref，需要通过forwordRef */}
+      	<Home ref={this.homeRef}/>
+      </div>
+    )
+  }
+}
+```
+
+
+
 ## 受控组件和非受控组件
 
 ### 受控组件
@@ -960,3 +999,277 @@ export default class App extends PureComponent {
 通过高阶组件，我们很轻易的就可以对 React 代码进行更优雅的处理和增强。
 
 但是 HOC 也有着自己的缺陷，比如如果我们多次增强一个组件时，调试和维护会很难；且在劫持 props 时，不规范的代码可能会导致数据的不一致。
+
+## Portals
+
+某些情况下，我们希望渲染的内容独立于父组件，甚至是独立于当前挂载的 DOM 元素中（比如说一个居中的弹窗）。
+
+我们可以使用 `ReactDOM.createProtal(child, container)` 来将子节点渲染到任何一个 DOM 元素上。第一个参数是我们希望渲染的元素，可以是 React 元素，字符串，DOM 元素，或者 fragment；第二个参数是一个 DOM 元素。
+
+```react
+// 正常的render产生的元素被挂载到最近的父节点上
+reder() {
+  return (
+  	<div>Hello World</div>
+  )
+}
+
+render() {
+  return ReactDOM.createProtal(
+    // 组件中的所有子元素
+  	this.props.children,
+    // 其他的DOM节点
+    DOMNode
+  )
+}
+```
+
+## Fragment
+
+有时我们会希望 JSX 可以有多个根元素，这时我们可以使用 fragment(片段)。
+
+```react
+render() {
+  return (
+  	<Fragment>
+    	<h2>counter: {this.state.cnt}</h2>
+      <button>+1</button>
+    </Fragment>
+  )
+}
+
+// 短语法，不用写Fragment，但是不能写任何属性
+<>
+  <h2>counter: {this.state.cnt}</h2>
+  <button>+1</button>
+</>
+```
+
+## StrictMode
+
+严格模式，所有放在 `<React.StrictMode></React.StrictMode>` 中的组件都会生效。
+
+StrictMode 和 Fragment 一样，不会渲染任何可见 UI，他为其后代元素触发额外的检查和警告，严格模式只在开发模式下运行，不会影响生产构建。
+
+严格模式检查：
+
+- 不安全的生命周期
+- 过时的 Ref API
+- 意外的副作用：开启严格模式的组件 constructor 会被调用两次，来检测构造函数是否有副作用。
+
+## React 中的样式
+
+现在前端已经是组件化的开发模式了，但是 CSS 却不是为组件化而生的。在组件化开发中，我们经常会要求 CSS 具有以下特性：
+
+- 可以编写局部 CSS，不会污染其他组件
+- 可以编写动态 CSS，以适应变化的状态和 UI
+- 支持所有 CSS 特性，伪类、动画、媒体查询
+
+事实上，CSS 一直是 React 的痛点，官方一直没有给出一个统一的解决方案。
+
+### 内联样式
+
+```react
+render() {
+  return (
+  	<div>
+    	<h2 style={{fontSize: '20px'}}></h2>
+    </div>
+  )
+}
+```
+
+内联样式的优点：
+
+- 不会产生冲突
+- 可以动态获取状态（动态样式）
+
+内联样式的缺点：
+
+- 写法上需要驼峰命名
+- 大量样式导致代码混乱
+- 伪类、伪元素等样式无法编写
+
+所以这么写依旧需要和普通的 CSS 结合使用。
+
+### CSS Modules
+
+CSS Modules 是所有 Webpack 配置环境下都可以使用的解决方案，在 React 中已经配置好了。
+
+我们只需要把之前的所有 `.css/.less/.scss` 都改为 `.module.css/.module.less/.module.scss`，就可以引用并使用了。
+
+```react
+import style from './style.css'
+
+render() {
+  return (
+    // 如此使用
+  	<h2 className={style.title}>Hello World!</h2>
+  )
+}
+```
+
+实质上，在进行打包时，对每个类生成一个独立的类名来解决命名冲突。
+
+这种方式虽然解决了命名冲突的问题，但是却不利于使用动态样式。
+
+### CSS in JS
+
+CSS in JS 为 CSS 赋予了包括像 CSS 预处理器一样的样式嵌套、函数定义、逻辑复用，还可以方便编写动态样式。
+
+常见的 CSS in JS 库有：
+
+- styled-components
+- emotion
+- glamoras
+
+**安装 styled-components**：
+
+```shell
+npm i styled-components
+```
+
+**标签模板字符串**：
+
+```js
+function foo(...args) {
+  console.log(args)
+}
+
+// 标签模板字符串，可以进行函数调用
+let name = 'Siven', age = 18
+foo`my name is ${name}, age is ${age}`
+// 函数接受到的参数是以下格式：
+[
+  // 第一个参数是被变量分割的字符串
+  ['my name is ', ', age is ', ''],
+  // 余下的参数是传入的变量
+  'Siven',
+  18
+]
+```
+
+**使用**：
+
+```react
+import React, { PureComponent } from 'react'
+import styled from 'styled-components'
+
+// 使用styled-components，这里创建了一个带有样式的div
+// 如果希望带有提示，可以下载vscode-styled-components插件
+const StyleWrapper = styled.div`
+  font-size: 20px;
+  color: red;
+  /* 这里面是可以进行样式嵌套的 */
+  .banner {
+    color: blue;
+  }
+`
+
+export default class App extends PureComponent {
+  render() {
+    return (
+      // 包裹希望带有样式的组件
+      <StyleWrapper>
+        App
+        <h2 className="banner">Hello World!</h2>
+      </StyleWrapper>
+    )
+  }
+}
+
+```
+
+### ClassNames
+
+如果觉得 React 中的动态类名太麻烦，可以使用 classnames 这个库来简化。
+
+```shell
+npm i classnames
+```
+
+```react
+import classNames from 'classnames'
+
+render() {
+	return (
+  	<div>
+      {/* 使用classNames，是一个函数，返回一个字符串 */}
+    	<h2 className={classNames(['foo', 'bar', 'baz'])}></h2>
+      <h2 className={classNames({ 'active': isActive }, 'foo', 'bar')}></h2>
+    </div>
+  )
+}
+```
+
+
+
+## AntDesign 组件库
+
+ant design 简称 antd，是蚂蚁金服开源的 UI 组件库，主要用于研发企业级中后台产品。
+
+**安装**：
+
+```shell
+npm i antd
+```
+
+**使用**：
+
+照着文档用就行了
+
+**问题**：
+
+antd 会使打包时体积过大吗？
+
+不会。因为 antd 使用了 ESM，支持 tree shaking。可以将我们没有使用过的函数在打包时 shaking 掉。
+
+### craco
+
+如果我们不想要定制主题，就需要通过修改 create-react-app 的配置。
+
+虽然我们可以通过 `npm run eject` 的方式来修改配置，但是有可能带来其他的风险。所以我们不建议直接修改 CRA 配置。
+
+目前比较推荐的是 craco。
+
+**安装**：
+
+```shell
+npm i -D @craco/craco
+```
+
+**使用**：
+
+```js
+// 在根目录下创建 crocal.config.js，类似 vue.config.js
+module.exports = {
+  
+}
+```
+
+**自定义主题**：
+
+antd 自定义主题需要配置类似 less-loader 的 less 变量覆盖功能，我们引入 `craco-less` 来进行加载样式和修改变量。
+
+```shell
+npm i cacro-less
+```
+
+```js
+module.exports = {
+	plugins: [
+		{
+      plugin: CracoLessPlugin,
+      options: {
+        lessLoaderOptions: {
+          lessOptions: {
+            modifyVars: { '@primary-color': '#1DA57A' },
+            javascriptEnabled: true,
+          }
+        }
+      }
+    }
+	]
+}
+```
+
