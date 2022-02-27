@@ -1849,3 +1849,223 @@ export default class About extends PureComponent {
 }
 ```
 
+那么现在来说，虽然可以用了，但是现在代码还不够优雅，比如说我们两个组件之间有很多重复的逻辑，我们还可以再优化一下：
+
+我们新建一个工具函数 `connect` 来返回一个高阶函数：
+
+```react
+// utils/connect.js
+import React, { PureComponent } from 'react';
+import store from '../store/index.js';
+
+export default function(mapStateToProps, mapDispatchToProps) {
+	return function enhanceHOC(WrappedComponent) {
+    return class EnhancedComponent extends PureComponent {
+      constructor(props) {
+        super(props);
+        this.state = {
+          // 这里的state就依赖于我们映射函数的结果
+          storeState: mapStateToProps(store.getState)
+        }
+      }
+      
+      componentDidMount() {
+        this.unsubscribe = store.subscribe(() => {
+					this.setState({
+            // 每次改变时重新获取依赖的state
+            storeState: mapStateToProps(store.getState)
+          });
+        })
+      }
+      
+      componentWillUnmount() {
+        // 组件销毁取消订阅
+        this.unsubscribe();
+      }
+      
+      render() {
+        // 将两个映射函数调用后传给对应组件
+        return <WrappedComponent { ...this.props }
+                 								 { ...mapStateToProps(store.getState()) }
+                 								 { ...mapDispatchToProps(store.dispatch) }
+               />
+      }
+    }
+  }
+}
+```
+
+```react
+// About.jsx
+import React, { PureComponent } from 'react';
+import connect from '../utils/connect.js';
+import { subAction } from '../store/actionCreator.js'
+
+function About(props) {
+  return (
+  	<div>
+      {/* 因为我们增强过这个组件，所以可以直接从props中获取state和dispatch */}
+      <h2>
+        About-Counter: { props.counter }	
+      </h2>
+      <button onClick={e => { props.decrement() }}>-1</button>
+    </div>
+  )
+}
+
+// 使用函数作为映射，告诉connect函数我们需要什么state或者要派发什么action
+// 这里我们返回一个对象，其中包含了我们props中需要的数据
+const mapStateToProps = state => ({
+  counter: state.counter
+})
+const mapDispatchToProps = dispatch => ({
+  decrement() {
+    dispatch(subAction());
+  }
+})
+
+// 导出我们增强过的组件
+export default connect(mapStateToProps, mapDispatchToProps)(About);
+```
+
+#### react-redux
+
+那么我们其实每一个项目都需要这么一个 `connect` 函数，所以我们可以封装好之后发布到 npm 上。
+
+实际上已经有一个这样的库，而且是官方的，这就是 `react-redux`：
+
+```shell
+npm i react-redux
+```
+
+```react
+// src/main.js
+
+// 导入Provider，实际上就是 React context
+import { Provider } from 'react-redux'
+import store from './store/index.js'
+
+// 需要把store传给react-redux。这样我们就可以让connect函数拿到store了
+ReactDOM.render(
+	<Provider store={store}>
+  	<App />
+  </Provider>,
+  document.getElementById('root')
+)
+```
+
+```react
+// About.jsx
+
+import { connect } from 'react-redux'
+import { subAction } from '../store/actionCreator.js'
+
+function About(props) {
+  return (
+  	<div>
+      {/* 因为我们增强过这个组件，所以可以直接从props中获取state和action */}
+      <h2>
+        About-Counter: { props.counter }
+      </h2>
+      <button onClick={e => { props.decrement() }}>-1</button>
+    </div>
+  )
+}
+
+// 使用函数作为映射，告诉connect函数我们需要什么state或者要派发什么action
+// 这里我们返回一个对象，其中包含了我们props中需要的数据
+const mapStateToProps = state => ({
+  counter: state.counter
+})
+const mapDispatchToProps = dispatch => ({
+  decrement() {
+    dispatch(subAction());
+  }
+})
+
+// 导出我们增强过的组件
+export default connect(mapStateToProps, mapDispatchToProps)(About);
+```
+
+### 异步操作
+
+我们现在对于异步数据的操作大概是这样：在 `componentDidMount` 中发送请求，等到数据到了，我们在将数据存储在 `state` 中，或者派发 `action` 存在 `Redux` 中。
+
+但是其实我们可以把异步请求也放在 `Redux` 中来进行管理，但是我们需要使用中间件（Middleware）完成。我们希望在派发 action 和 reducer 处理 action 之间发送异步网络请求。
+
+#### 中间件
+
+在 Express 或 Koa 这类框架来说，中间件可以帮助我们在请求和响应之间嵌入一些操作代码，比如 cookie 解析、日志记录、文件压缩等操作。
+
+在 Redux 中，也引入了中间件的概念：这个中间件的目的实在 dispatch 的 action 到达 reducer 之间，扩展一些自己的代码，比如日志记录、调用异步接口、添加代码调试功能等等。
+
+我们这里要用的就是帮助我们发送异步请求的中间件：redux-thunk。
+
+redux-thunk 可以让 action 是一个函数，这个函数会被调用，且传入两个参数：`dispatch` 和 `getState`。
+
+调用 `dispatch` 可以让我们再次派发 `action`，而 `getState` 是考虑到我们的操作可能会依赖之前的状态。
+
+```shell
+npm i redux-thunk
+```
+
+```react
+// src/store/index.js
+
+// 导入 applyMiddleware 函数
+import { createStore, applyMiddleware } from 'redux';
+import thunkMiddleware from 'redux-thunk';
+import reducer from './reducer.js';
+
+// 应用中间件
+const storeEnhancer = applyMiddleware(thunkMiddleware);
+
+const store = createStore(reducer, storeEnhancer);
+
+export default store;
+```
+
+```js
+// src/actionCreators.js
+// 现在 action 可以是一个函数了
+export const asyncAction = (dispatch, getState) => {
+  axios({
+    method: 'GET',
+    // ......
+  }).then({ data } => {
+    // 拿到数据后再次派发一个action来触发reducer
+    dispatch(anotherAction(data));
+  })
+}
+```
+
+```react
+// About.jsx
+import {asyncAction} from '../store/actionCreators.js'
+import {connect} from 'react-redux';
+
+const mapStateToProps = (state) => ({
+  asyncData: state.asyncData
+})
+
+const mapDispatchToProps = (dispatch) => ({
+  sendAsyncRequest() {
+    // 这里我们派发请求时就直接传入函数了
+    dispatch(asyncAction)
+  }
+})
+
+function About(props) {
+  return (
+  	<div>
+      {/* 依旧是和之前一样从props中拿到数据和action */}
+      <h2>异步数据：{props.asyncData}</h2>
+    	<button onClick={ e => { props.sendAsyncRequest() } }>发送请求</button>
+    </div>
+  )
+}
+
+// 导出我们增强过的组件
+export default connect(mapStateToProps, mapDispatchToProps)(About);
+```
+
