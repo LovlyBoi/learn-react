@@ -1547,6 +1547,16 @@ module.exports = {
 
 ## Redux
 
+Redux 类似于 Vuex，是一个状态管理的容器。React 并没有帮助我们解决状态管理的问题，React 主要解决的还是视图层面的问题。对于日渐复杂的状态，我们需要 Redux 这样的状态管理工具来帮助管理。
+
+Redux 不仅仅可以在 React 中使用，还可以和其他框架一起使用，比如说 Vue（但是 Vue 有 Vuex、Pinia）。
+
+```shell
+npm i redux
+```
+
+
+
 ### JS 纯函数
 
 函数式编程中有一个概念叫 **纯函数**：大概意思是这个函数在相同的输入下，输出需要相同，且和其他隐藏信息或状态无关；函数不可以有副作用，比如改变外界的全局变量。
@@ -1569,5 +1579,273 @@ function add2(bar) {
 
 **React 要求我们编写函数组件或是类组件时，都必须像纯函数一样，保护他们的 props 不被修改**。
 
+### 核心理念
 
+Redux 有三个核心理念：
+
+
+- Store
+- Action
+- Reducer
+
+
+
+### 三大原则
+
+Redux 还有三大原则：
+
+- 单一数据源
+  - 整个应用程序的 state 被存储在一个 object tree 中，并且这个 object tree 只存储在一个 store 中。Redux并没有强制让我们不能创建多个 store，只是那样会不好维护。单一数据源可以让程序的 state 变得方便维护、追踪和修改。
+- State 只读
+  - 唯一修改 State 的方法就是触发 action，不能以任何其他形式修改 State。这样就确保了对状态的任何修改都被集中管理，避免产生竟态问题。
+- 使用纯函数来进行修改
+  - 通过 Reducer 将旧的 state 和 action 联系起来，并返回一个新的 state。随着应用程序逐渐复杂，我们可以将 reducer 拆分为多个小的 reducer，分别操作 state tree 的不同部分。但是所有的 reducer 都需要是一个纯函数，不能产生任何的副作用。
+
+### 使用
+
+#### 基本
+
+**Store**:
+
+```js
+const initialState = {
+  counter: 0
+}
+
+// 创建store时需要传入一个reducer
+const store = redux.createStore(reducer)
+
+// 订阅store的修改
+store.subscribe(() => {
+  console.log('state发生了变化，counter：', store.getState().counter)
+})
+```
+
+**Action**:
+
+```js
+const action1 = {
+  type: 'INCREMENT'
+}
+const action2 = {
+  type: 'DECREMENT'
+}
+
+// 派发action
+store.dispatch(action1)
+```
+
+**Reducer**:
+
+```js
+// 第一次state没有值，给一个初始值
+function reducer(state = initialState, action) {
+  // 每次reducer执行时都会传进来上一次的state，行为和设计非常类似reduce函数传入的那个函数，所以叫做reducer
+  switch(action.type) {
+    case 'INCREMENT':
+      return {
+        ...state,
+        counter: state.counter + 1
+      };
+    case 'DECREMENT':
+      return {
+        ...state,
+        counter: state.counter - 1
+      };
+    default:
+      return state;
+  }
+}
+```
+
+#### 在项目中使用
+
+我们现在还有很多问题，比如说 action 的负载只能写死，action 的 type 没有统一抽取成常量等。
+
+那我们可以在项目中新建一个 store 文件夹，用来编写 redux 相关的代码。
+
+```js
+// src/mian.js
+import store from './store/index.js'
+import { addAction, subAction } from './store/actionCreators.js'
+
+store.subscribe(() => {
+  console.log('订阅store状态变化', store.getState())
+})
+
+// 派发一个 +1 的 action
+store.dispatch(addAction({ counter: 1 }))
+```
+
+```js
+// src/store/index.js
+
+import { createStore } from 'redux'
+// 引入我们拆分出去的reducer
+import reducer from './reducer.js'
+
+const store = createStore(reducer);
+
+export default store;
+```
+
+```js
+// src/store/reducer.js
+import { ADD_NUMBER, SUB_NUMBER } from './constants.js'
+
+// 将reducer拆分出去
+const initialState = {
+  counter: 0
+}
+
+function reducer(state = initialState, action) {
+	switch(action.type) {
+    case ADD_NUMBER:
+      return {
+        ...state,
+        counter: state.payload.counter + 1,
+      }
+    case SUB_NUMBER:
+      return {
+        ...state,
+        counter: state.payload.counter - 1,
+      }
+    default:
+      return state;
+  }
+}
+
+export default reducer;
+```
+
+```js
+// src/store/actionCreators.js
+import { ADD_NUMBER, SUB_NUMBER } from './constants.js'
+
+// 将action封装为函数，避免对action硬编码
+export const addAction = (payload) => ({
+  type: ADD_NUMBER,
+  payload,
+})
+
+export const subAction = (payload) => ({
+  type: SUB_NUMBER,
+  payload,
+})
+```
+
+```js
+// src/store/constants.js
+// 封装常量，避免写错
+export const ADD_NUMBER = "ADD_NUMBER"
+export const SUB_NUMBER = "SUB_NUMBER"
+```
+
+接下来我们就可以在项目中真实使用 redux 啦！
+
+我们接下来，使用两个组件来演示 redux，这两个组件引用同一个计数器：
+
+```react
+// Home.jsx
+import React, { PureComponent } from 'react';
+
+// 引入store
+import store from '../store/index.js'
+// 引入action
+import { addAction } from '../store/actionCreator.js'
+
+export default class Home extends PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = {
+      // 拿到store
+      counter: store.getState().counter,
+    }
+  }
+  
+  // 挂载时订阅变化
+  constructorDidMount() {
+    // 状态改变时回调函数更新state
+		this.unsubscribe = store.subscribe(() => {
+      this.setState({
+        ...this.state,
+        counter: store.getState().counter,
+      })
+    })
+  }
+  
+  // 组件销毁时取消订阅
+  componentWillUnmount() {
+    this.unsubscribe()
+  }
+  
+  render() {
+		return (
+    	<div>
+      	<h2>
+        	Home-Counter: {this.state.counter}	
+        </h2>
+        <button onClick={e => { this.increment() }}>+1</button>
+      </div>
+    )
+  }
+  
+  increment() {
+    // 派发action，修改数据
+    store.dispatch(addAction())
+  }
+}
+```
+
+```react
+// About.jsx
+import React, { PureComponent } from 'react';
+
+// 引入store
+import store from '../store/index.js'
+
+// 引入action
+import { subAction } from '../store/actionCreator.js'
+
+export default class About extends PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = {
+      // 拿到store
+      counter: store.getState().counter,
+    }
+  }
+  
+	// 挂载时订阅变化
+  constructorDidMount() {
+    // 状态改变时回调函数更新state
+		this.unsubscribe = store.subscribe(() => {
+      this.setState({
+        ...this.state,
+        counter: store.getState().counter,
+      })
+    })
+  }
+  
+  // 组件销毁时取消订阅
+  componentWillUnmount() {
+    this.unsubscribe()
+  }
+  
+  render() {
+		return (
+    	<div>
+      	<h2>
+        	About-Counter: {this.state.counter}	
+        </h2>
+        <button onClick={e => { this.decrement() }}>-1</button>
+      </div>
+    )
+  }
+  
+  decrement() {
+		store.dispatch(subAction())
+  }
+}
+```
 
